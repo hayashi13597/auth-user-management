@@ -1,30 +1,9 @@
 import { Router } from "express";
 import authRoutes from "./auth.route";
+import userRoutes from "./user.route";
 
 const router = Router();
 
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check endpoint
- *     tags: [Health]
- *     responses:
- *       200:
- *         description: Server is running
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- */
 router.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -35,6 +14,9 @@ router.get("/health", (req, res) => {
 
 // Mount auth routes
 router.use("/auth", authRoutes);
+
+// Mount user routes
+router.use("/users", userRoutes);
 
 // 404 handler - catch all undefined routes
 router.use((req, res) => {

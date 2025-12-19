@@ -85,3 +85,28 @@ export const authenticate = asyncHandler(
     next();
   }
 );
+
+/**
+ * Authorization middleware factory
+ * Checks if user has required role(s)
+ * @param roles - Role(s) required to access the route
+ * @returns Middleware function
+ */
+export const authorize = (...roles: string[]) => {
+  return asyncHandler(
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      if (!req.user) {
+        throw new UnauthorizedError("Authentication required", "AUTH_REQUIRED");
+      }
+
+      if (!roles.includes(req.user.role)) {
+        throw new ForbiddenError(
+          "You do not have permission to access this resource",
+          "INSUFFICIENT_PERMISSIONS"
+        );
+      }
+
+      next();
+    }
+  );
+};
