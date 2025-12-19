@@ -1,6 +1,7 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Application } from "express";
+import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import routes from "./routes";
@@ -32,6 +33,18 @@ if (process.env.NODE_ENV === "development") {
     next();
   });
 }
+
+// Global rate limiter
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // limit each IP to 300 requests per windowMs
+  message: "Too many requests from this IP, please try again after 15 minutes", // Message to return when limit is exceeded
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Apply to all requests
+app.use(globalLimiter);
 
 // Routes
 app.use("/api", routes);
