@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../config/database";
+import { ConflictError, NotFoundError, UnauthorizedError } from "../errors";
 import { RefreshToken, User } from "../generated/prisma/client";
 import { tokenService } from "./token.service";
 
@@ -40,7 +41,10 @@ class AuthService {
     // check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      throw new Error("User with this email already exists.");
+      throw new ConflictError(
+        "User with this email already exists.",
+        "USER_EXISTS"
+      );
     }
 
     // hash password
@@ -84,18 +88,27 @@ class AuthService {
     // check if user exists
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      throw new Error("Invalid email or password.");
+      throw new UnauthorizedError(
+        "Invalid email or password.",
+        "INVALID_CREDENTIALS"
+      );
     }
 
     // check password
     const isPasswordValid = bcrypt.compareSync(password, user.password);
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password.");
+      throw new UnauthorizedError(
+        "Invalid email or password.",
+        "INVALID_CREDENTIALS"
+      );
     }
 
     // check if user is active
     if (!user.isActive) {
-      throw new Error("User account is inactive.");
+      throw new UnauthorizedError(
+        "User account is inactive.",
+        "ACCOUNT_INACTIVE"
+      );
     }
 
     // create access and refresh tokens
@@ -137,7 +150,7 @@ class AuthService {
     // verify refresh token
     const decoded = tokenService.verifyRefreshToken(refreshToken);
     if (!decoded) {
-      throw new Error("Invalid refresh token.");
+      throw new UnauthorizedError("Invalid refresh token.", "INVALID_TOKEN");
     }
 
     // check if refresh token exists in database and is not revoked
@@ -145,7 +158,10 @@ class AuthService {
       where: { token: refreshToken },
     });
     if (!storedToken || storedToken.isRevoked) {
-      throw new Error("Refresh token is invalid or has been revoked.");
+      throw new UnauthorizedError(
+        "Refresh token is invalid or has been revoked.",
+        "TOKEN_REVOKED"
+      );
     }
 
     // generate new tokens
@@ -189,7 +205,7 @@ class AuthService {
 
     // if token not found, throw error
     if (!token) {
-      throw new Error("Token is invalid");
+      throw new NotFoundError("Token is invalid", "TOKEN_NOT_FOUND");
     }
 
     // revoke the refresh token
@@ -267,7 +283,7 @@ class AuthService {
       },
     });
     if (!session) {
-      throw new Error("session does not exist");
+      throw new NotFoundError("Session does not exist", "SESSION_NOT_FOUND");
     }
 
     await prisma.refreshToken.update({

@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
+import { BadRequestError, UnauthorizedError } from "../errors";
 import { authService } from "../services/auth.service";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendCreated, sendSuccess } from "../utils/response";
 
 class AuthController {
   /**
@@ -8,21 +11,12 @@ class AuthController {
    * @param req Request user registration data (email, password, name)
    * @return void
    */
-  async register(req: Request, res: Response): Promise<void> {
-    try {
+  register = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
       const user = await authService.create(req.body);
-      res.status(201).json({
-        success: true,
-        message: "User registered successfully",
-        data: { user },
-      });
-    } catch (error) {
-      res
-        .status(400)
-        .json({ success: false, message: (error as Error).message });
-      return;
+      sendCreated(res, { user }, "User registered successfully");
     }
-  }
+  );
 
   /**
    * Login user
@@ -30,87 +24,73 @@ class AuthController {
    * @param req Request user login data (email, password)
    * @return void
    */
-  async login(req: Request, res: Response): Promise<void> {
-    try {
-      // get metadata from request
-      const metadata = {
-        userAgent: req.headers["user-agent"],
-        ipAddress: req.ip || req.socket.remoteAddress,
-      };
+  login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    // get metadata from request
+    const metadata = {
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip || req.socket.remoteAddress,
+    };
 
-      const result = await authService.login(req.body, metadata);
+    const result = await authService.login(req.body, metadata);
 
-      // set HttpOnly cookies
-      res.cookie("accessToken", result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // HTTPS only in production
-        sameSite: "strict",
-        maxAge: 15 * 60 * 1000, // 15 minutes
-      });
+    // set HttpOnly cookies
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
 
-      res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
-      res.status(200).json({
-        success: true,
-        message: "Login successful",
-        data: {
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-        },
-      });
-    } catch (error) {
-      res
-        .status(400)
-        .json({ success: false, message: (error as Error).message });
-      return;
-    }
-  }
+    sendSuccess(
+      res,
+      {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      },
+      "Login successful"
+    );
+  });
 
   /**
    * refresh tokens
    * POST /api/auth/refresh
    * @param req Request containing refresh token
    */
-  async refresh(req: Request, res: Response): Promise<void> {
-    try {
-      const result = await authService.refreshTokens(req.body.refreshToken);
+  refresh = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const result = await authService.refreshTokens(req.body.refreshToken);
 
-      // set new HttpOnly cookies
-      res.cookie("accessToken", result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // HTTPS only in production
-        sameSite: "strict",
-        maxAge: 15 * 60 * 1000, // 15 minutes
-      });
+    // set new HttpOnly cookies
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
 
-      res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
-      res.status(200).json({
-        success: true,
-        message: "Tokens refreshed successfully",
-        data: {
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-        },
-      });
-    } catch (error) {
-      res
-        .status(400)
-        .json({ success: false, message: (error as Error).message });
-      return;
-    }
-  }
+    sendSuccess(
+      res,
+      {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      },
+      "Tokens refreshed successfully"
+    );
+  });
 
   /**
    * logout
@@ -118,25 +98,15 @@ class AuthController {
    * @param req Request containing refresh token
    * @return void
    */
-  async logout(req: Request, res: Response): Promise<void> {
-    try {
-      const result = await authService.logout(req.body.refreshToken);
+  logout = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const result = await authService.logout(req.body.refreshToken);
 
-      // Clear cookies
-      res.clearCookie("accessToken");
-      res.clearCookie("refreshToken");
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
 
-      res.status(200).json({
-        success: true,
-        message: result.message,
-      });
-    } catch (error) {
-      res
-        .status(400)
-        .json({ success: false, message: (error as Error).message });
-      return;
-    }
-  }
+    sendSuccess(res, undefined, result.message);
+  });
 
   /**
    * Get user sessions
@@ -145,38 +115,21 @@ class AuthController {
    * @param res Response with list of user sessions
    * @return void
    */
-  async getSessions(req: Request, res: Response): Promise<void> {
-    const { userId } = req.user;
-    try {
+  getSessions = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
       if (!req.user) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
+      const { userId } = req.user;
       if (!userId) {
-        res.status(400).json({
-          success: false,
-          message: "User ID is missing",
-        });
-        return;
+        throw new BadRequestError("User ID is missing");
       }
 
       const sessions = await authService.getUserSessions(userId);
-
-      res.status(200).json({
-        success: true,
-        data: { sessions },
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Failed to get user sessions",
-      });
+      sendSuccess(res, { sessions });
     }
-  }
+  );
 
   /**
    * Revoke all user tokens
@@ -185,23 +138,15 @@ class AuthController {
    * @param res Response with success message
    * @return void
    */
-  async revokeAllSessions(req: Request, res: Response): Promise<void> {
-    const { userId } = req.user;
-    try {
+  revokeAllSessions = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
       if (!req.user) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
+      const { userId } = req.user;
       if (!userId) {
-        res.status(400).json({
-          success: false,
-          message: "User ID is missing",
-        });
-        return;
+        throw new BadRequestError("User ID is missing");
       }
 
       await authService.revokeAllUserTokens(userId);
@@ -210,17 +155,9 @@ class AuthController {
       res.clearCookie("accessToken");
       res.clearCookie("refreshToken");
 
-      res.status(200).json({
-        success: true,
-        message: "Logged out from all devices",
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Failed to revoke sessions",
-      });
+      sendSuccess(res, undefined, "Logged out from all devices");
     }
-  }
+  );
 
   /**
    * Revoke a specific session
@@ -229,48 +166,26 @@ class AuthController {
    * @param res Response with success message
    * @return void
    */
-  async revokeSession(req: Request, res: Response): Promise<void> {
-    try {
+  revokeSession = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
       if (!req.user) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
+
       const { userId } = req.user;
       if (!userId) {
-        res.status(400).json({
-          success: false,
-          message: "User ID is missing",
-        });
-        return;
+        throw new BadRequestError("User ID is missing");
       }
 
       const { sessionId } = req.params;
       if (!sessionId) {
-        res.status(400).json({
-          success: false,
-          message: "Session ID is missing",
-        });
-        return;
+        throw new BadRequestError("Session ID is missing");
       }
 
       await authService.revokeSession(userId, sessionId);
-
-      res.status(200).json({
-        success: true,
-        message: "Session has been revoked",
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to revoke session";
-      res.status(400).json({
-        success: false,
-        message,
-      });
+      sendSuccess(res, undefined, "Session has been revoked");
     }
-  }
+  );
 }
 
 export const authController = new AuthController();

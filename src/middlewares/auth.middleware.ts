@@ -1,11 +1,13 @@
 import { NextFunction, Request, Response } from "express";
 import { prisma } from "../config/database";
+import { ForbiddenError, UnauthorizedError } from "../errors";
 import { tokenService } from "../services/token.service";
+import { asyncHandler } from "../utils/asyncHandler";
 
 /**
- * Create a standardized authentication error response
+ * Extract token from request (cookies, headers, or query params)
  * @param req - Request object
- * @returns Error response object
+ * @returns Token string or null
  */
 const extractToken = (req: Request): string | null => {
   // 1. Check cookies
@@ -13,7 +15,7 @@ const extractToken = (req: Request): string | null => {
     return req.cookies.accessToken;
   }
 
-  // 2. Check Authorization header and query parameters
+  // 2. Check Authorization header
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = tokenService.extractTokenFromHeader(authHeader);
@@ -29,40 +31,16 @@ const extractToken = (req: Request): string | null => {
 };
 
 /**
- * Create an AuthError object
- * @param message Error message
- * @param code Error code
- * @returns AuthError object
+ * Authentication middleware
+ * Verifies JWT token and attaches user info to request
  */
-type AuthError = {
-  message: string;
-  code: string;
-};
-const createAuthError = (message: string, code: string): AuthError => {
-  return { message, code };
-};
-
-/**
- * Create a standardized authentication error response
- * @param req - Request object
- * @param res - Response object
- * @param next - Next function
- * @returns void
- */
-export const authenticate = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    // 1. Lấy token từ request
+export const authenticate = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // 1. Extract token from request
     const token = extractToken(req);
 
     if (!token) {
-      res
-        .status(401)
-        .json(createAuthError("Token was not provided", "TOKEN_MISSING"));
-      return;
+      throw new UnauthorizedError("Token was not provided", "TOKEN_MISSING");
     }
 
     // 2. Verify token
@@ -72,8 +50,7 @@ export const authenticate = async (
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Token is invalid";
-      res.status(401).json(createAuthError(message, "TOKEN_INVALID"));
-      return;
+      throw new UnauthorizedError(message, "TOKEN_INVALID");
     }
 
     // 3. Find user associated with the token
@@ -88,17 +65,14 @@ export const authenticate = async (
     });
 
     if (!user) {
-      res.status(401).json(createAuthError("User not found", "USER_NOT_FOUND"));
-      return;
+      throw new UnauthorizedError("User not found", "USER_NOT_FOUND");
     }
 
     if (!user.isActive) {
-      res
-        .status(403)
-        .json(
-          createAuthError("User account has been deactivated", "USER_INACTIVE")
-        );
-      return;
+      throw new ForbiddenError(
+        "User account has been deactivated",
+        "USER_INACTIVE"
+      );
     }
 
     // 4. Attach user info to request object
@@ -109,8 +83,5 @@ export const authenticate = async (
     };
 
     next();
-  } catch (error) {
-    console.error("Auth middleware error:", error);
-    res.status(500).json(createAuthError("Authentication error", "AUTH_ERROR"));
   }
-};
+);
