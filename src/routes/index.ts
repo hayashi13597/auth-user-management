@@ -1,5 +1,4 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import authRoutes from "./auth.route";
 import userRoutes from "./user.route";
 
@@ -13,17 +12,8 @@ router.get("/health", (req, res) => {
   });
 });
 
-// rate-limited for auth routes
-const authLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 5, // only try 5 requests per hour
-  message: "Login attempts exceeded. Please try again after an hour.",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 // Mount auth routes
-router.use("/auth", authLimiter, authRoutes);
+router.use("/auth", authRoutes);
 
 // Mount user routes
 router.use("/users", userRoutes);

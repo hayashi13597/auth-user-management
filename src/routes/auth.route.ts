@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import {
+  apiLimiter,
+  authLimiter,
+  refreshLimiter,
+  registerLimiter,
+} from "../middlewares/rate-limit.middleware";
 import { validate } from "../middlewares/validate.middleware";
 import {
   createUserSchema,
@@ -11,17 +17,38 @@ import {
 const router = Router();
 
 // Public routes
-router.post("/register", validate(createUserSchema), authController.register);
-router.post("/login", validate(loginUserSchema), authController.login);
-router.post("/refresh", validate(refreshTokenSchema), authController.refresh);
+router.post(
+  "/register",
+  registerLimiter,
+  validate(createUserSchema),
+  authController.register
+);
+router.post(
+  "/login",
+  authLimiter,
+  validate(loginUserSchema),
+  authController.login
+);
+router.post(
+  "/refresh",
+  refreshLimiter,
+  validate(refreshTokenSchema),
+  authController.refresh
+);
 
 // Protected routes
-router.post("/logout", authenticate, authController.logout);
-router.get("/sessions", authenticate, authController.getSessions);
-router.post("/revoke-all", authenticate, authController.revokeAllSessions);
+router.post("/logout", authenticate, apiLimiter, authController.logout);
+router.get("/sessions", authenticate, apiLimiter, authController.getSessions);
+router.post(
+  "/revoke-all",
+  authenticate,
+  apiLimiter,
+  authController.revokeAllSessions
+);
 router.delete(
   "/sessions/:sessionId/revoke",
   authenticate,
+  apiLimiter,
   authController.revokeSession
 );
 
