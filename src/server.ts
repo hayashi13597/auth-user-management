@@ -4,16 +4,16 @@ import { prisma } from "./config/database";
 const PORT = process.env.PORT || 5000;
 
 const gracefulShutdown = async () => {
-  console.log("\n🛑 Shutting down gracefully...");
-  await prisma.$disconnect();
-  process.exit(0);
+	console.log("\n🛑 Shutting down gracefully...");
+	await prisma.$disconnect();
+	process.exit(0);
 };
 
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
 
 const server = app.listen(PORT, () => {
-  console.log(`
+	console.log(`
 ╔═══════════════════════════════════════╗
 ║   🚀 Server is running!               ║
 ║   📍 Port: ${PORT}                       ║

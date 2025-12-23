@@ -8,15 +8,15 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 prisma
-  .$connect()
-  .then(async () => {
-    console.log("Connected to the database successfully.");
-    await prisma.$disconnect();
-  })
-  .catch(async (error) => {
-    console.error("Error connecting to the database:", error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+	.$connect()
+	.then(async () => {
+		console.log("Connected to the database successfully.");
+		await prisma.$disconnect();
+	})
+	.catch(async (error) => {
+		console.error("Error connecting to the database:", error);
+		await prisma.$disconnect();
+		process.exit(1);
+	});
 
 export { prisma };

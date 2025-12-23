@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 /**
  * Wrapper function to catch async errors in route handlers
@@ -8,9 +8,9 @@ import { NextFunction, Request, Response } from "express";
  * @returns Express middleware function
  */
 export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+	fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
 ) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
+	return (req: Request, res: Response, next: NextFunction): void => {
+		Promise.resolve(fn(req, res, next)).catch(next);
+	};
 };

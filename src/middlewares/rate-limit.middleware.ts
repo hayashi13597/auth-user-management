@@ -5,11 +5,11 @@ import rateLimit from "express-rate-limit";
  * 300 requests per 15 minutes per IP
  */
 export const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
-  message: "Too many requests from this IP, please try again after 15 minutes",
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 300,
+	message: "Too many requests from this IP, please try again after 15 minutes",
+	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
 /**
@@ -18,12 +18,12 @@ export const globalLimiter = rateLimit({
  * Does not count successful requests
  */
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  message: "Too many login attempts, please try again after 15 minutes",
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true, // Only count failed login attempts
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 5,
+	message: "Too many login attempts, please try again after 15 minutes",
+	standardHeaders: true,
+	legacyHeaders: false,
+	skipSuccessfulRequests: true, // Only count failed login attempts
 });
 
 /**
@@ -31,12 +31,12 @@ export const authLimiter = rateLimit({
  * 3 accounts per hour per IP
  */
 export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
-  message:
-    "Too many accounts created from this IP, please try again after an hour",
-  standardHeaders: true,
-  legacyHeaders: false,
+	windowMs: 60 * 60 * 1000, // 1 hour
+	max: 3,
+	message:
+		"Too many accounts created from this IP, please try again after an hour",
+	standardHeaders: true,
+	legacyHeaders: false,
 });
 
 /**
@@ -44,11 +44,11 @@ export const registerLimiter = rateLimit({
  * 20 requests per hour per IP
  */
 export const refreshLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,
-  message: "Too many token refresh attempts, please try again after an hour",
-  standardHeaders: true,
-  legacyHeaders: false,
+	windowMs: 60 * 60 * 1000, // 1 hour
+	max: 20,
+	message: "Too many token refresh attempts, please try again after an hour",
+	standardHeaders: true,
+	legacyHeaders: false,
 });
 
 /**
@@ -56,10 +56,10 @@ export const refreshLimiter = rateLimit({
  * 100 requests per 15 minutes per IP
  */
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  message:
-    "Too many requests to this endpoint, please try again after 15 minutes",
-  standardHeaders: true,
-  legacyHeaders: false,
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100,
+	message:
+		"Too many requests to this endpoint, please try again after 15 minutes",
+	standardHeaders: true,
+	legacyHeaders: false,
 });

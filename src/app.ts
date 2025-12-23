@@ -1,6 +1,6 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express, { Application } from "express";
+import express, { type Application } from "express";
 import helmet from "helmet";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { globalLimiter } from "./middlewares/rate-limit.middleware";
@@ -13,10 +13,10 @@ app.use(helmet());
 
 // CORS
 app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true,
-  })
+	cors({
+		origin: process.env.CLIENT_URL || "http://localhost:3000",
+		credentials: true,
+	}),
 );
 
 // Body parser
@@ -28,10 +28,10 @@ app.use(cookieParser());
 
 // Request logging (development)
 if (process.env.NODE_ENV === "development") {
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path}`);
-    next();
-  });
+	app.use((req, _res, next) => {
+		console.log(`${req.method} ${req.path}`);
+		next();
+	});
 }
 
 // Apply global rate limiter to all requests

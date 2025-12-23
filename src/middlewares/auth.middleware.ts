@@ -1,7 +1,7 @@
-import { NextFunction, Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../config/database";
 import { ForbiddenError, UnauthorizedError } from "../errors";
-import { tokenService } from "../services/token.service";
+import { type DecodedToken, tokenService } from "../services/token.service";
 import { asyncHandler } from "../utils/asyncHandler";
 
 /**
@@ -10,24 +10,24 @@ import { asyncHandler } from "../utils/asyncHandler";
  * @returns Token string or null
  */
 const extractToken = (req: Request): string | null => {
-  // 1. Check cookies
-  if (req.cookies && req.cookies.accessToken) {
-    return req.cookies.accessToken;
-  }
+	// 1. Check cookies
+	if (req.cookies?.accessToken) {
+		return req.cookies.accessToken;
+	}
 
-  // 2. Check Authorization header
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = tokenService.extractTokenFromHeader(authHeader);
-    if (token) return token;
-  }
+	// 2. Check Authorization header
+	const authHeader = req.headers.authorization;
+	if (authHeader) {
+		const token = tokenService.extractTokenFromHeader(authHeader);
+		if (token) return token;
+	}
 
-  // 3. Check query parameters
-  if (req.query.token && typeof req.query.token === "string") {
-    return req.query.token;
-  }
+	// 3. Check query parameters
+	if (req.query.token && typeof req.query.token === "string") {
+		return req.query.token;
+	}
 
-  return null;
+	return null;
 };
 
 /**
@@ -35,55 +35,55 @@ const extractToken = (req: Request): string | null => {
  * Verifies JWT token and attaches user info to request
  */
 export const authenticate = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // 1. Extract token from request
-    const token = extractToken(req);
+	async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+		// 1. Extract token from request
+		const token = extractToken(req);
 
-    if (!token) {
-      throw new UnauthorizedError("Token was not provided", "TOKEN_MISSING");
-    }
+		if (!token) {
+			throw new UnauthorizedError("Token was not provided", "TOKEN_MISSING");
+		}
 
-    // 2. Verify token
-    let decoded;
-    try {
-      decoded = tokenService.verifyAccessToken(token);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Token is invalid";
-      throw new UnauthorizedError(message, "TOKEN_INVALID");
-    }
+		// 2. Verify token
+		let decoded: DecodedToken;
+		try {
+			decoded = tokenService.verifyAccessToken(token);
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Token is invalid";
+			throw new UnauthorizedError(message, "TOKEN_INVALID");
+		}
 
-    // 3. Find user associated with the token
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-      },
-    });
+		// 3. Find user associated with the token
+		const user = await prisma.user.findUnique({
+			where: { id: decoded.userId },
+			select: {
+				id: true,
+				email: true,
+				role: true,
+				isActive: true,
+			},
+		});
 
-    if (!user) {
-      throw new UnauthorizedError("User not found", "USER_NOT_FOUND");
-    }
+		if (!user) {
+			throw new UnauthorizedError("User not found", "USER_NOT_FOUND");
+		}
 
-    if (!user.isActive) {
-      throw new ForbiddenError(
-        "User account has been deactivated",
-        "USER_INACTIVE"
-      );
-    }
+		if (!user.isActive) {
+			throw new ForbiddenError(
+				"User account has been deactivated",
+				"USER_INACTIVE",
+			);
+		}
 
-    // 4. Attach user info to request object
-    req.user = {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    };
+		// 4. Attach user info to request object
+		req.user = {
+			userId: user.id,
+			email: user.email,
+			role: user.role,
+		};
 
-    next();
-  }
+		next();
+	},
 );
 
 /**
@@ -93,20 +93,20 @@ export const authenticate = asyncHandler(
  * @returns Middleware function
  */
 export const authorize = (...roles: string[]) => {
-  return asyncHandler(
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      if (!req.user) {
-        throw new UnauthorizedError("Authentication required", "AUTH_REQUIRED");
-      }
+	return asyncHandler(
+		async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+			if (!req.user) {
+				throw new UnauthorizedError("Authentication required", "AUTH_REQUIRED");
+			}
 
-      if (!roles.includes(req.user.role)) {
-        throw new ForbiddenError(
-          "You do not have permission to access this resource",
-          "INSUFFICIENT_PERMISSIONS"
-        );
-      }
+			if (!roles.includes(req.user.role)) {
+				throw new ForbiddenError(
+					"You do not have permission to access this resource",
+					"INSUFFICIENT_PERMISSIONS",
+				);
+			}
 
-      next();
-    }
-  );
+			next();
+		},
+	);
 };
