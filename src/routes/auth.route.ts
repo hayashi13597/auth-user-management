@@ -8,11 +8,7 @@ import {
   registerLimiter,
 } from "../middlewares/rate-limit.middleware";
 import { validate } from "../middlewares/validate.middleware";
-import {
-  createUserSchema,
-  loginUserSchema,
-  refreshTokenSchema,
-} from "../schemas/auth.schema";
+import { createUserSchema, loginUserSchema } from "../schemas/auth.schema";
 
 const router = Router();
 
@@ -29,11 +25,7 @@ router.post(
   validate(loginUserSchema),
   authController.login
 );
-router.post(
-  "/refresh",
-  refreshLimiter,
-  authController.refresh
-);
+router.post("/refresh", refreshLimiter, authController.refresh);
 
 // Protected routes
 router.post("/logout", authenticate, apiLimiter, authController.logout);
