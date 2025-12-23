@@ -65,7 +65,13 @@ class AuthController {
    * @param req Request containing refresh token
    */
   refresh = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const result = await authService.refreshTokens(req.body.refreshToken);
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      throw new BadRequestError("Refresh token is missing");
+    }
+
+    const result = await authService.refreshTokens(refreshToken);
 
     // set new HttpOnly cookies
     res.cookie("accessToken", result.accessToken, {
@@ -82,14 +88,7 @@ class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    sendSuccess(
-      res,
-      {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      },
-      "Tokens refreshed successfully"
-    );
+    sendSuccess(res, undefined, "Tokens refreshed successfully");
   });
 
   /**
@@ -99,7 +98,13 @@ class AuthController {
    * @return void
    */
   logout = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const result = await authService.logout(req.body.refreshToken);
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      throw new BadRequestError("Refresh token is missing");
+    }
+
+    const result = await authService.logout(refreshToken);
 
     // Clear cookies
     res.clearCookie("accessToken");

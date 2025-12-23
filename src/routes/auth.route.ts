@@ -32,7 +32,6 @@ router.post(
 router.post(
   "/refresh",
   refreshLimiter,
-  validate(refreshTokenSchema),
   authController.refresh
 );
 
