@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
 interface TokenPayload {
@@ -40,6 +41,7 @@ class TokenService {
 			expiresIn: this.ACCESS_TOKEN_EXPIRY,
 			issuer: "auth-service",
 			audience: "api-client",
+			jwtid: randomUUID(), // ensures every token string stays unique
 		};
 
 		const token = jwt.sign(payload, this.ACCESS_TOKEN_SECRET, options);
@@ -59,6 +61,7 @@ class TokenService {
 			expiresIn: this.REFRESH_TOKEN_EXPIRY,
 			issuer: "auth-service",
 			audience: "api-client",
+			jwtid: randomUUID(), // prevents collisions during concurrent refreshes
 		};
 		const token = jwt.sign(payload, this.REFRESH_TOKEN_SECRET, options);
 
