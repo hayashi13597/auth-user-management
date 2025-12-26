@@ -2,6 +2,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type Application } from "express";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { globalLimiter } from "./middlewares/rate-limit.middleware";
 import routes from "./routes";
@@ -36,6 +38,17 @@ if (process.env.NODE_ENV === "development") {
 
 // Apply global rate limiter to all requests
 app.use(globalLimiter);
+
+// Swagger UI
+app.use(
+	"/api-docs",
+	swaggerUi.serve,
+	swaggerUi.setup(swaggerSpec, { explorer: true }),
+);
+app.get("/api-docs.json", (_req, res) => {
+	res.setHeader("Content-Type", "application/json");
+	res.send(swaggerSpec);
+});
 
 // Routes
 app.use("/api", routes);
