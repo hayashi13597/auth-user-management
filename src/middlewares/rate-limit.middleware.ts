@@ -6,7 +6,7 @@ import rateLimit from "express-rate-limit";
  */
 export const globalLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 300,
+	limit: 300,
 	message: "Too many requests from this IP, please try again after 15 minutes",
 	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
@@ -19,7 +19,7 @@ export const globalLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 5,
+	limit: 5,
 	message: "Too many login attempts, please try again after 15 minutes",
 	standardHeaders: true,
 	legacyHeaders: false,
@@ -32,7 +32,7 @@ export const authLimiter = rateLimit({
  */
 export const registerLimiter = rateLimit({
 	windowMs: 60 * 60 * 1000, // 1 hour
-	max: 3,
+	limit: 3,
 	message:
 		"Too many accounts created from this IP, please try again after an hour",
 	standardHeaders: true,
@@ -45,7 +45,7 @@ export const registerLimiter = rateLimit({
  */
 export const refreshLimiter = rateLimit({
 	windowMs: 60 * 60 * 1000, // 1 hour
-	max: 20,
+	limit: 20,
 	message: "Too many token refresh attempts, please try again after an hour",
 	standardHeaders: true,
 	legacyHeaders: false,
@@ -57,7 +57,7 @@ export const refreshLimiter = rateLimit({
  */
 export const apiLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 100,
+	limit: 100,
 	message:
 		"Too many requests to this endpoint, please try again after 15 minutes",
 	standardHeaders: true,

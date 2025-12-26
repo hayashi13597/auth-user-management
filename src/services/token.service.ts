@@ -130,7 +130,7 @@ class TokenService {
 
 	/**
 	 * get access token expiry
-	 * @returns access token expiry in milliseconds (default 15 minutes)
+	 * @returns access token expiry date (default 15 minutes)
 	 */
 	getAccessTokenExpiry(): Date {
 		const expiryMs = 15 * 60 * 1000; // 15 minutes in milliseconds
@@ -139,7 +139,7 @@ class TokenService {
 
 	/**
 	 * get refresh token expiry
-	 * @returns refresh token expiry in milliseconds (default 7 days)
+	 * @returns refresh token expiry date (default 7 days)
 	 */
 	getRefreshTokenExpiry(): Date {
 		const expiryMs = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds

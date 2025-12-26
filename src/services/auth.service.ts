@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { ConflictError, NotFoundError, UnauthorizedError } from "../errors";
 import type { RefreshToken, User } from "../generated/prisma/client";
 import { tokenService } from "./token.service";
+import { tokenBlacklistService } from "./token-blacklist.service";
 
 interface LoginMetadata {
 	userAgent?: string;
@@ -28,6 +29,12 @@ type SessionResponse = Omit<
 interface MessageResponse {
 	message: string;
 }
+
+const maskToken = (token: string): string => {
+	const start = token.slice(0, 8);
+	const end = token.slice(-6);
+	return `${start}...${end}`;
+};
 
 class AuthService {
 	/**
@@ -147,6 +154,20 @@ class AuthService {
 	 * @return Object containing new access and refresh tokens
 	 */
 	async refreshTokens(refreshToken: string): Promise<RefreshTokensResponse> {
+		const isBlacklisted =
+			await tokenBlacklistService.isBlacklisted(refreshToken);
+		if (isBlacklisted) {
+			console.warn(
+				`[SECURITY] Refresh token reuse detected (blacklisted). token=${maskToken(
+					refreshToken,
+				)}`,
+			);
+			throw new UnauthorizedError(
+				"Refresh token is invalid or has been revoked.",
+				"TOKEN_REVOKED",
+			);
+		}
+
 		// verify refresh token
 		const decoded = tokenService.verifyRefreshToken(refreshToken);
 		if (!decoded) {
@@ -158,6 +179,12 @@ class AuthService {
 			where: { token: refreshToken },
 		});
 		if (!storedToken || storedToken.isRevoked) {
+			await tokenBlacklistService.add(refreshToken);
+			console.warn(
+				`[SECURITY] Refresh token reuse detected (revoked/unknown). user=${
+					decoded.userId
+				} token=${maskToken(refreshToken)}`,
+			);
 			throw new UnauthorizedError(
 				"Refresh token is invalid or has been revoked.",
 				"TOKEN_REVOKED",
@@ -178,6 +205,7 @@ class AuthService {
 			where: { token: refreshToken },
 			data: { isRevoked: true },
 		});
+		await tokenBlacklistService.add(refreshToken);
 
 		// store new refresh token
 		await prisma.refreshToken.create({
@@ -213,6 +241,7 @@ class AuthService {
 			where: { token: refreshToken },
 			data: { isRevoked: true },
 		});
+		await tokenBlacklistService.add(refreshToken);
 
 		return { message: "Logged out successfully" };
 	}
@@ -224,6 +253,16 @@ class AuthService {
 	 * @return success message
 	 */
 	async revokeAllUserTokens(userId: string): Promise<MessageResponse> {
+		const activeTokens = await prisma.refreshToken.findMany({
+			where: {
+				userId,
+				isRevoked: false,
+			},
+			select: {
+				token: true,
+			},
+		});
+
 		await prisma.refreshToken.updateMany({
 			where: {
 				userId,
@@ -233,6 +272,12 @@ class AuthService {
 				isRevoked: true,
 			},
 		});
+
+		await Promise.all(
+			activeTokens.map(async ({ token }) => {
+				await tokenBlacklistService.add(token);
+			}),
+		);
 
 		return { message: "All user tokens have been revoked" };
 	}
@@ -290,6 +335,7 @@ class AuthService {
 			where: { id: sessionId },
 			data: { isRevoked: true },
 		});
+		await tokenBlacklistService.add(session.token);
 
 		return { message: "Session has been revoked" };
 	}
