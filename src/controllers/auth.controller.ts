@@ -52,8 +52,6 @@ class AuthController {
 			res,
 			{
 				user: result.user,
-				accessToken: result.accessToken,
-				refreshToken: result.refreshToken,
 			},
 			"Login successful",
 		);

@@ -11,7 +11,11 @@
     "db:reset": "prisma migrate reset",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "biome:check": "biome check --write",
+    "biome:format": "biome format --write",
+    "biome:lint": "biome lint --write",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +31,8 @@
     "@types/node": "^25.0.2",
     "@types/pg": "^8.16.0",
     "dotenv": "^17.2.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "nodemon": "^3.1.11",
     "prisma": "^7.1.0",
     "tsx": "^4.21.0",
@@ -44,5 +50,14 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.3",
     "zod": "^4.2.1"
+  },
+  "lint-staged": {
+    "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
+      "biome check --files-ignore-unknown=true",
+      "biome check --write --no-errors-on-unmatched"
+    ],
+    "*": [
+      "biome check --no-errors-on-unmatched --files-ignore-unknown=true"
+    ]
   }
 }
