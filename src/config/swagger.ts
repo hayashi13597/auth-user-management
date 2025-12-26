@@ -27,13 +27,6 @@ const swaggerDefinition = {
 		},
 	],
 	components: {
-		securitySchemes: {
-			cookieAuth: {
-				type: "apiKey",
-				in: "cookie",
-				name: "accessToken",
-			},
-		},
 		schemas: {
 			User: {
 				type: "object",
@@ -134,7 +127,6 @@ const swaggerDefinition = {
 			},
 		},
 	},
-	security: [{ cookieAuth: [] }],
 	paths: {
 		"/health": {
 			get: {
@@ -198,7 +190,6 @@ const swaggerDefinition = {
 					400: jsonErrorResponse,
 					409: jsonErrorResponse,
 				},
-				security: [{ cookieAuth: [] }],
 			},
 		},
 		"/auth/login": {
@@ -248,7 +239,6 @@ const swaggerDefinition = {
 					400: jsonErrorResponse,
 					401: jsonErrorResponse,
 				},
-				security: [{ cookieAuth: [] }],
 			},
 		},
 		"/auth/refresh": {
@@ -275,7 +265,6 @@ const swaggerDefinition = {
 					400: jsonErrorResponse,
 					401: jsonErrorResponse,
 				},
-				security: [{ cookieAuth: [] }],
 			},
 		},
 		"/auth/logout": {
