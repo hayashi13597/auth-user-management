@@ -1,10 +1,15 @@
 import app from "./app";
 import { prisma } from "./config/database";
+import {
+	startRefreshTokenCleanupJob,
+	stopRefreshTokenCleanupJob,
+} from "./jobs/refresh-token-cleanup";
 
 const PORT = process.env.PORT || 5000;
 
 const gracefulShutdown = async () => {
 	console.log("\n🛑 Shutting down gracefully...");
+	stopRefreshTokenCleanupJob();
 	await prisma.$disconnect();
 	process.exit(0);
 };
@@ -21,6 +26,7 @@ const server = app.listen(PORT, () => {
 ║   📝 API: http://localhost:${PORT}/api   ║
 ╚═══════════════════════════════════════╝
   `);
+	startRefreshTokenCleanupJob();
 });
 
 export default server;
