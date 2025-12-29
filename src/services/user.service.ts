@@ -7,7 +7,10 @@ import {
 } from "../errors/index.js";
 import type { User } from "../generated/prisma/client.js";
 
-type UserResponse = Omit<User, "password">;
+type UserResponse = Omit<
+	User,
+	"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+>;
 type UpdateProfileData = Pick<User, "name" | "email">;
 type ChangePasswordData = {
 	currentPassword: string;

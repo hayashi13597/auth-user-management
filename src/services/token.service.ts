@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
 interface TokenPayload {

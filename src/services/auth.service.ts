@@ -2,10 +2,13 @@ import bcrypt from "bcrypt";
 import { prisma } from "../config/database.js";
 import {
 	ConflictError,
+	ForbiddenError,
 	NotFoundError,
 	UnauthorizedError,
 } from "../errors/index.js";
 import type { RefreshToken, User } from "../generated/prisma/client.js";
+import { auditService } from "./audit.service.js";
+import { fingerprintService } from "./fingerprint.service.js";
 import { tokenService } from "./token.service.js";
 import { tokenBlacklistService } from "./token-blacklist.service.js";
 
@@ -15,10 +18,16 @@ interface LoginMetadata {
 }
 
 type CreateUserData = Pick<User, "email" | "password" | "name">;
-type CreateUserDataResponse = Omit<User, "password">;
+type CreateUserDataResponse = Omit<
+	User,
+	"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+>;
 type LoginUserData = Pick<User, "email" | "password">;
 type LoginUserDataResponse = {
-	user: Omit<User, "password">;
+	user: Omit<
+		User,
+		"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+	>;
 	accessToken: string;
 	refreshToken: string;
 };
@@ -28,11 +37,18 @@ type RefreshTokensResponse = {
 };
 type SessionResponse = Omit<
 	RefreshToken,
-	"token" | "isRevoked" | "userId" | "updatedAt"
+	"token" | "isRevoked" | "userId" | "updatedAt" | "fingerprint"
 >;
 interface MessageResponse {
 	message: string;
 }
+
+// Account lockout configuration
+const LOCKOUT_CONFIG = {
+	maxAttempts: 5, // Lock after 5 failed attempts
+	lockoutDurationMinutes: 15, // Lock for 15 minutes
+	resetWindowMinutes: 30, // Reset failed attempts after 30 minutes of no failures
+};
 
 const maskToken = (token: string): string => {
 	const start = token.slice(0, 8);
@@ -44,10 +60,15 @@ class AuthService {
 	/**
 	 * create a new user.
 	 * @param data User registration data (email, password, name)
+	 * @param metadata Additional metadata (IP address, user agent)
 	 * @returns Created user data
 	 */
-	async create(data: CreateUserData): Promise<CreateUserDataResponse> {
+	async create(
+		data: CreateUserData,
+		metadata: LoginMetadata = {},
+	): Promise<CreateUserDataResponse> {
 		const { email, password, name } = data;
+		const { ipAddress, userAgent } = metadata;
 
 		// check if user already exists
 		const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -59,7 +80,7 @@ class AuthService {
 		}
 
 		// hash password
-		const hashedPassword = bcrypt.hashSync(password, 10);
+		const hashedPassword = bcrypt.hashSync(password, 12); // Increased from 10 to 12 rounds
 
 		// create user
 		const user = await prisma.user.create({
@@ -78,6 +99,9 @@ class AuthService {
 				updatedAt: true,
 			},
 		});
+
+		// Log registration
+		await auditService.logRegister(user.id, email, ipAddress, userAgent);
 
 		// return created user without password
 		return user;
@@ -99,15 +123,41 @@ class AuthService {
 		// check if user exists
 		const user = await prisma.user.findUnique({ where: { email } });
 		if (!user) {
+			await auditService.logLoginFailed(
+				email,
+				"User not found",
+				ipAddress,
+				userAgent,
+			);
 			throw new UnauthorizedError(
 				"Invalid email or password.",
 				"INVALID_CREDENTIALS",
 			);
 		}
 
+		// Check if account is locked
+		if (user.lockoutUntil && user.lockoutUntil > new Date()) {
+			const remainingMinutes = Math.ceil(
+				(user.lockoutUntil.getTime() - Date.now()) / 60000,
+			);
+			await auditService.logLoginFailed(
+				email,
+				"Account locked",
+				ipAddress,
+				userAgent,
+				user.id,
+			);
+			throw new ForbiddenError(
+				`Account is locked. Try again in ${remainingMinutes} minutes.`,
+				"ACCOUNT_LOCKED",
+			);
+		}
+
 		// check password
 		const isPasswordValid = bcrypt.compareSync(password, user.password);
 		if (!isPasswordValid) {
+			// Handle failed login attempt
+			await this.handleFailedLogin(user, ipAddress, userAgent);
 			throw new UnauthorizedError(
 				"Invalid email or password.",
 				"INVALID_CREDENTIALS",
@@ -116,11 +166,33 @@ class AuthService {
 
 		// check if user is active
 		if (!user.isActive) {
+			await auditService.logLoginFailed(
+				email,
+				"Account inactive",
+				ipAddress,
+				userAgent,
+				user.id,
+			);
 			throw new UnauthorizedError(
 				"User account is inactive.",
 				"ACCOUNT_INACTIVE",
 			);
 		}
+
+		// Reset failed login attempts on successful login
+		if (user.failedLoginAttempts > 0) {
+			await prisma.user.update({
+				where: { id: user.id },
+				data: {
+					failedLoginAttempts: 0,
+					lockoutUntil: null,
+					lastFailedLogin: null,
+				},
+			});
+		}
+
+		// Generate device fingerprint
+		const fingerprint = fingerprintService.generate({ userAgent, ipAddress });
 
 		// create access and refresh tokens
 		const payload = {
@@ -131,7 +203,7 @@ class AuthService {
 
 		const { accessToken, refreshToken } = tokenService.generateTokens(payload);
 
-		// save refresh token to database
+		// save refresh token to database with fingerprint
 		await prisma.refreshToken.create({
 			data: {
 				userId: user.id,
@@ -139,17 +211,89 @@ class AuthService {
 				expiresAt: tokenService.getRefreshTokenExpiry(),
 				ipAddress: ipAddress || null,
 				userAgent: userAgent || null,
+				fingerprint,
 			},
 		});
 
-		const { password: _, ...userWithoutPassword } = user;
+		// Log successful login
+		await auditService.logLoginSuccess(user.id, ipAddress, userAgent);
+
+		const {
+			password: _,
+			failedLoginAttempts: __,
+			lockoutUntil: ___,
+			lastFailedLogin: ____,
+			...userWithoutSensitiveData
+		} = user;
 
 		// return user data along with tokens
 		return {
-			user: userWithoutPassword,
+			user: userWithoutSensitiveData,
 			accessToken,
 			refreshToken,
 		};
+	}
+
+	/**
+	 * Handle failed login attempt - increment counter and potentially lock account
+	 */
+	private async handleFailedLogin(
+		user: User,
+		ipAddress?: string,
+		userAgent?: string,
+	): Promise<void> {
+		const now = new Date();
+		let failedAttempts = user.failedLoginAttempts;
+
+		// Reset counter if last failure was outside the window
+		if (user.lastFailedLogin) {
+			const timeSinceLastFailure =
+				(now.getTime() - user.lastFailedLogin.getTime()) / 60000;
+			if (timeSinceLastFailure > LOCKOUT_CONFIG.resetWindowMinutes) {
+				failedAttempts = 0;
+			}
+		}
+
+		failedAttempts += 1;
+
+		const updateData: {
+			failedLoginAttempts: number;
+			lastFailedLogin: Date;
+			lockoutUntil?: Date;
+		} = {
+			failedLoginAttempts: failedAttempts,
+			lastFailedLogin: now,
+		};
+
+		// Lock account if max attempts reached
+		if (failedAttempts >= LOCKOUT_CONFIG.maxAttempts) {
+			updateData.lockoutUntil = new Date(
+				now.getTime() + LOCKOUT_CONFIG.lockoutDurationMinutes * 60000,
+			);
+			await auditService.logAccountLocked(
+				user.id,
+				"Max failed attempts reached",
+				LOCKOUT_CONFIG.lockoutDurationMinutes,
+				ipAddress,
+				userAgent,
+			);
+			console.warn(
+				`[SECURITY] Account locked for user=${user.id} after ${failedAttempts} failed attempts`,
+			);
+		}
+
+		await prisma.user.update({
+			where: { id: user.id },
+			data: updateData,
+		});
+
+		await auditService.logLoginFailed(
+			user.email,
+			"Invalid password",
+			ipAddress,
+			userAgent,
+			user.id,
+		);
 	}
 
 	/**
@@ -158,24 +302,27 @@ class AuthService {
 	 * @return Object containing new access and refresh tokens
 	 */
 	async refreshTokens(refreshToken: string): Promise<RefreshTokensResponse> {
+		// verify refresh token first to get user info for potential revocation
+		const decoded = tokenService.verifyRefreshToken(refreshToken);
+		if (!decoded) {
+			throw new UnauthorizedError("Invalid refresh token.", "INVALID_TOKEN");
+		}
+
 		const isBlacklisted =
 			await tokenBlacklistService.isBlacklisted(refreshToken);
 		if (isBlacklisted) {
 			console.warn(
-				`[SECURITY] Refresh token reuse detected (blacklisted). token=${maskToken(
-					refreshToken,
-				)}`,
+				`[SECURITY] Refresh token reuse detected (blacklisted). user=${
+					decoded.userId
+				} token=${maskToken(refreshToken)}`,
 			);
+			// SECURITY: Revoke ALL tokens for this user - potential token theft
+			await this.revokeAllUserTokens(decoded.userId);
+			await auditService.logTokenReuseDetected(decoded.userId);
 			throw new UnauthorizedError(
-				"Refresh token is invalid or has been revoked.",
-				"TOKEN_REVOKED",
+				"Session compromised. All sessions have been revoked. Please login again.",
+				"TOKEN_REUSE_DETECTED",
 			);
-		}
-
-		// verify refresh token
-		const decoded = tokenService.verifyRefreshToken(refreshToken);
-		if (!decoded) {
-			throw new UnauthorizedError("Invalid refresh token.", "INVALID_TOKEN");
 		}
 
 		// check if refresh token exists in database and is not revoked
@@ -189,9 +336,12 @@ class AuthService {
 					decoded.userId
 				} token=${maskToken(refreshToken)}`,
 			);
+			// SECURITY: Revoke ALL tokens for this user - potential token theft
+			await this.revokeAllUserTokens(decoded.userId);
+			await auditService.logTokenReuseDetected(decoded.userId);
 			throw new UnauthorizedError(
-				"Refresh token is invalid or has been revoked.",
-				"TOKEN_REVOKED",
+				"Session compromised. All sessions have been revoked. Please login again.",
+				"TOKEN_REUSE_DETECTED",
 			);
 		}
 
@@ -204,14 +354,14 @@ class AuthService {
 		const { accessToken, refreshToken: newRefreshToken } =
 			tokenService.generateTokens(payload);
 
-		// revoke old refresh token
+		// revoke old refresh token with grace period (allows concurrent refresh)
 		await prisma.refreshToken.update({
 			where: { token: refreshToken },
 			data: { isRevoked: true },
 		});
-		await tokenBlacklistService.add(refreshToken);
+		await tokenBlacklistService.addRefreshTokenWithGrace(refreshToken);
 
-		// store new refresh token
+		// store new refresh token with fingerprint
 		await prisma.refreshToken.create({
 			data: {
 				token: newRefreshToken,
@@ -219,8 +369,16 @@ class AuthService {
 				expiresAt: tokenService.getRefreshTokenExpiry(),
 				ipAddress: storedToken.ipAddress || null,
 				userAgent: storedToken.userAgent || null,
+				fingerprint: storedToken.fingerprint || null,
 			},
 		});
+
+		// Log token refresh
+		await auditService.logTokenRefresh(
+			decoded.userId,
+			storedToken.ipAddress || undefined,
+			storedToken.userAgent || undefined,
+		);
 
 		return { accessToken, refreshToken: newRefreshToken };
 	}
@@ -228,8 +386,14 @@ class AuthService {
 	/**
 	 * logout a user.
 	 * @param refreshToken Refresh token string (optional)
+	 * @param metadata Request metadata for audit logging
 	 */
-	async logout(refreshToken: string): Promise<MessageResponse> {
+	async logout(
+		refreshToken: string,
+		metadata: LoginMetadata = {},
+	): Promise<MessageResponse> {
+		const { ipAddress, userAgent } = metadata;
+
 		// find the refresh token in database
 		const token = await prisma.refreshToken.findUnique({
 			where: { token: refreshToken },
@@ -247,6 +411,9 @@ class AuthService {
 		});
 		await tokenBlacklistService.add(refreshToken);
 
+		// Log logout
+		await auditService.logLogout(token.userId, ipAddress, userAgent);
+
 		return { message: "Logged out successfully" };
 	}
 
@@ -254,9 +421,15 @@ class AuthService {
 	 * Logout from all devices.
 	 * remove all refresh tokens for the user.
 	 * @param userId User ID
+	 * @param metadata Request metadata for audit logging
 	 * @return success message
 	 */
-	async revokeAllUserTokens(userId: string): Promise<MessageResponse> {
+	async revokeAllUserTokens(
+		userId: string,
+		metadata: LoginMetadata = {},
+	): Promise<MessageResponse> {
+		const { ipAddress, userAgent } = metadata;
+
 		const activeTokens = await prisma.refreshToken.findMany({
 			where: {
 				userId,
@@ -282,6 +455,11 @@ class AuthService {
 				await tokenBlacklistService.add(token);
 			}),
 		);
+
+		// Log all sessions revoked (only if called with metadata - i.e., user-initiated)
+		if (ipAddress || userAgent) {
+			await auditService.logAllSessionsRevoked(userId, ipAddress, userAgent);
+		}
 
 		return { message: "All user tokens have been revoked" };
 	}
@@ -319,12 +497,16 @@ class AuthService {
 	 * Get revoke a specific session.
 	 * @param userId User ID
 	 * @param sessionId Session ID
+	 * @param metadata Request metadata for audit logging
 	 * @return success message
 	 */
 	async revokeSession(
 		userId: string,
 		sessionId: string,
+		metadata: LoginMetadata = {},
 	): Promise<MessageResponse> {
+		const { ipAddress, userAgent } = metadata;
+
 		const session = await prisma.refreshToken.findFirst({
 			where: {
 				id: sessionId,
@@ -340,6 +522,14 @@ class AuthService {
 			data: { isRevoked: true },
 		});
 		await tokenBlacklistService.add(session.token);
+
+		// Log session revoked
+		await auditService.logSessionRevoked(
+			userId,
+			sessionId,
+			ipAddress,
+			userAgent,
+		);
 
 		return { message: "Session has been revoked" };
 	}

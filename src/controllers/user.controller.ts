@@ -89,25 +89,6 @@ class UserController {
 			);
 		},
 	);
-
-	/**
-	 * Get user by ID (Admin only)
-	 * GET /api/users/:id
-	 * @param req Request with user ID parameter
-	 * @return void
-	 */
-	getUserById = asyncHandler(
-		async (req: Request, res: Response): Promise<void> => {
-			const userId = req.params.id;
-
-			if (!userId) {
-				throw new BadRequestError("User ID is required");
-			}
-
-			const user = await userService.getUserById(userId);
-			sendSuccess(res, { user }, "User retrieved successfully");
-		},
-	);
 }
 
 export const userController = new UserController();

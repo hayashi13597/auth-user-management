@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../config/database.js";
 import { ForbiddenError, UnauthorizedError } from "../errors/index.js";
 import { type DecodedToken, tokenService } from "../services/token.service.js";
+import { tokenBlacklistService } from "../services/token-blacklist.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 /**
@@ -43,7 +44,14 @@ export const authenticate = asyncHandler(
 			throw new UnauthorizedError("Token was not provided", "TOKEN_MISSING");
 		}
 
-		// 2. Verify token
+		// 2. Check if access token is blacklisted (immediate revocation check)
+		const isBlacklisted =
+			await tokenBlacklistService.isAccessTokenBlacklisted(token);
+		if (isBlacklisted) {
+			throw new UnauthorizedError("Token has been revoked", "TOKEN_REVOKED");
+		}
+
+		// 3. Verify token
 		let decoded: DecodedToken;
 		try {
 			decoded = tokenService.verifyAccessToken(token);
@@ -53,7 +61,7 @@ export const authenticate = asyncHandler(
 			throw new UnauthorizedError(message, "TOKEN_INVALID");
 		}
 
-		// 3. Find user associated with the token
+		// 4. Find user associated with the token
 		const user = await prisma.user.findUnique({
 			where: { id: decoded.userId },
 			select: {

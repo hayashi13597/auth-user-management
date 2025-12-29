@@ -1,10 +1,26 @@
 import type { Request, Response } from "express";
+import {
+	accessTokenCookieOptions,
+	clearAccessTokenCookieOptions,
+	clearRefreshTokenCookieOptions,
+	refreshTokenCookieOptions,
+} from "../config/cookies.js";
 import { BadRequestError, UnauthorizedError } from "../errors/index.js";
 import { authService } from "../services/auth.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendCreated, sendSuccess } from "../utils/response.js";
 
 class AuthController {
+	/**
+	 * Helper to extract metadata from request
+	 */
+	private getMetadata(req: Request) {
+		return {
+			userAgent: req.headers["user-agent"],
+			ipAddress: req.ip || req.socket.remoteAddress,
+		};
+	}
+
 	/**
 	 * Create a new user account.
 	 * POST /api/auth/register
@@ -13,7 +29,8 @@ class AuthController {
 	 */
 	register = asyncHandler(
 		async (req: Request, res: Response): Promise<void> => {
-			const user = await authService.create(req.body);
+			const metadata = this.getMetadata(req);
+			const user = await authService.create(req.body, metadata);
 			sendCreated(res, { user }, "User registered successfully");
 		},
 	);
@@ -26,27 +43,13 @@ class AuthController {
 	 */
 	login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 		// get metadata from request
-		const metadata = {
-			userAgent: req.headers["user-agent"],
-			ipAddress: req.ip || req.socket.remoteAddress,
-		};
+		const metadata = this.getMetadata(req);
 
 		const result = await authService.login(req.body, metadata);
 
 		// set HttpOnly cookies
-		res.cookie("accessToken", result.accessToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production", // HTTPS only in production
-			sameSite: "strict",
-			maxAge: 15 * 60 * 1000, // 15 minutes
-		});
-
-		res.cookie("refreshToken", result.refreshToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-		});
+		res.cookie("accessToken", result.accessToken, accessTokenCookieOptions);
+		res.cookie("refreshToken", result.refreshToken, refreshTokenCookieOptions);
 
 		sendSuccess(
 			res,
@@ -72,19 +75,8 @@ class AuthController {
 		const result = await authService.refreshTokens(refreshToken);
 
 		// set new HttpOnly cookies
-		res.cookie("accessToken", result.accessToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production", // HTTPS only in production
-			sameSite: "strict",
-			maxAge: 15 * 60 * 1000, // 15 minutes
-		});
-
-		res.cookie("refreshToken", result.refreshToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-		});
+		res.cookie("accessToken", result.accessToken, accessTokenCookieOptions);
+		res.cookie("refreshToken", result.refreshToken, refreshTokenCookieOptions);
 
 		sendSuccess(res, undefined, "Tokens refreshed successfully");
 	});
@@ -102,11 +94,12 @@ class AuthController {
 			throw new BadRequestError("Refresh token is missing");
 		}
 
-		const result = await authService.logout(refreshToken);
+		const metadata = this.getMetadata(req);
+		const result = await authService.logout(refreshToken, metadata);
 
-		// Clear cookies
-		res.clearCookie("accessToken");
-		res.clearCookie("refreshToken");
+		// Clear cookies with proper options
+		res.clearCookie("accessToken", clearAccessTokenCookieOptions);
+		res.clearCookie("refreshToken", clearRefreshTokenCookieOptions);
 
 		sendSuccess(res, undefined, result.message);
 	});
@@ -152,11 +145,12 @@ class AuthController {
 				throw new BadRequestError("User ID is missing");
 			}
 
-			await authService.revokeAllUserTokens(userId);
+			const metadata = this.getMetadata(req);
+			await authService.revokeAllUserTokens(userId, metadata);
 
-			// Clear current cookies
-			res.clearCookie("accessToken");
-			res.clearCookie("refreshToken");
+			// Clear current cookies with proper options
+			res.clearCookie("accessToken", clearAccessTokenCookieOptions);
+			res.clearCookie("refreshToken", clearRefreshTokenCookieOptions);
 
 			sendSuccess(res, undefined, "Logged out from all devices");
 		},
@@ -185,7 +179,8 @@ class AuthController {
 				throw new BadRequestError("Session ID is missing");
 			}
 
-			await authService.revokeSession(userId, sessionId);
+			const metadata = this.getMetadata(req);
+			await authService.revokeSession(userId, sessionId, metadata);
 			sendSuccess(res, undefined, "Session has been revoked");
 		},
 	);

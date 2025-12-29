@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { userController } from "../controllers/user.controller.js";
-import { authenticate, authorize } from "../middlewares/auth.middleware.js";
+import { authenticate } from "../middlewares/auth.middleware.js";
+import { apiLimiter } from "../middlewares/rate-limit.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import {
 	changePasswordSchema,
@@ -9,29 +10,41 @@ import {
 
 const router = Router();
 
+// All user routes require authentication and rate limiting
+router.use(authenticate);
+router.use(apiLimiter);
+
 // User routes (authenticated users)
-router.get("/profile", authenticate, userController.getProfile);
+/**
+ * GET /api/users/profile
+ * Get current user's profile
+ */
+router.get("/profile", userController.getProfile);
+
+/**
+ * PUT /api/users/profile
+ * Update current user's profile
+ */
 router.put(
 	"/profile",
-	authenticate,
 	validate(updateProfileSchema),
 	userController.updateProfile,
 );
+
+/**
+ * PUT /api/users/change-password
+ * Change current user's password
+ */
 router.put(
 	"/change-password",
-	authenticate,
 	validate(changePasswordSchema),
 	userController.changePassword,
 );
-router.delete("/account", authenticate, userController.deleteAccount);
 
-// Admin routes
-router.get("/", authenticate, authorize("ADMIN"), userController.getAllUsers);
-router.get(
-	"/:id",
-	authenticate,
-	authorize("ADMIN"),
-	userController.getUserById,
-);
+/**
+ * DELETE /api/users/account
+ * Delete current user's account
+ */
+router.delete("/account", userController.deleteAccount);
 
 export default router;

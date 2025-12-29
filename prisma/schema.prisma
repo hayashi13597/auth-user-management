@@ -13,6 +13,20 @@ enum UserRole {
   MODERATOR
 }
 
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  TOKEN_REUSE_DETECTED
+  SESSION_REVOKED
+  ALL_SESSIONS_REVOKED
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+  PASSWORD_CHANGED
+  REGISTER
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -22,12 +36,18 @@ model User {
   isActive  Boolean  @default(true)
   role      UserRole @default(USER)
 
+  // Account lockout fields
+  failedLoginAttempts Int      @default(0)
+  lockoutUntil        DateTime?
+  lastFailedLogin     DateTime?
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
 
   @@map("users") // name the table "users" in the database
 }
@@ -45,8 +65,9 @@ model RefreshToken {
   isRevoked Boolean  @default(false) // indicates if the token has been revoked
 
   // Device/Browser info
-  userAgent String?
-  ipAddress String?
+  userAgent   String?
+  ipAddress   String?
+  fingerprint String? // hash of device fingerprint for theft detection
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -56,4 +77,28 @@ model RefreshToken {
   @@index([token])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+
+  // User reference (nullable for failed login attempts with unknown user)
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Action details
+  action    AuditAction
+  details   String?     // JSON string with additional details
+
+  // Request metadata
+  ipAddress String?
+  userAgent String?
+
+  // Timestamps
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
