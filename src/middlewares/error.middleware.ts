@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
-import { AppError } from "../errors";
+import { AppError } from "../errors/index.js";
 
 /**
  * Standardized API response format

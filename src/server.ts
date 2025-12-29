@@ -1,9 +1,9 @@
-import app from "./app";
-import { prisma } from "./config/database";
+import app from "./app.js";
+import { prisma } from "./config/database.js";
 import {
 	startRefreshTokenCleanupJob,
 	stopRefreshTokenCleanupJob,
-} from "./jobs/refresh-token-cleanup";
+} from "./jobs/refresh-token-cleanup.js";
 
 const PORT = process.env.PORT || 5000;
 

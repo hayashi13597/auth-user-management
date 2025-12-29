@@ -1,9 +1,13 @@
 import bcrypt from "bcrypt";
-import { prisma } from "../config/database";
-import { ConflictError, NotFoundError, UnauthorizedError } from "../errors";
-import type { RefreshToken, User } from "../generated/prisma/client";
-import { tokenService } from "./token.service";
-import { tokenBlacklistService } from "./token-blacklist.service";
+import { prisma } from "../config/database.js";
+import {
+	ConflictError,
+	NotFoundError,
+	UnauthorizedError,
+} from "../errors/index.js";
+import type { RefreshToken, User } from "../generated/prisma/client.js";
+import { tokenService } from "./token.service.js";
+import { tokenBlacklistService } from "./token-blacklist.service.js";
 
 interface LoginMetadata {
 	userAgent?: string;

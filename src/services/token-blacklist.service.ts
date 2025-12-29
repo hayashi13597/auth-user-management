@@ -1,5 +1,5 @@
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { redis } from "../config/redis";
+import { redis } from "../config/redis.js";
 
 class TokenBlacklistService {
 	private readonly keyPrefix = "blacklist:refresh:";

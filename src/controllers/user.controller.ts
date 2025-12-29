@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import { BadRequestError } from "../errors";
-import { userService } from "../services/user.service";
-import { asyncHandler } from "../utils/asyncHandler";
-import { sendSuccess } from "../utils/response";
+import { BadRequestError } from "../errors/index.js";
+import { userService } from "../services/user.service.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendSuccess } from "../utils/response.js";
 
 class UserController {
 	/**

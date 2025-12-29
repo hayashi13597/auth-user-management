@@ -3,10 +3,13 @@ import cors from "cors";
 import express, { type Application } from "express";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./config/swagger";
-import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
-import { globalLimiter } from "./middlewares/rate-limit.middleware";
-import routes from "./routes";
+import { swaggerSpec } from "./config/swagger.js";
+import {
+	errorHandler,
+	notFoundHandler,
+} from "./middlewares/error.middleware.js";
+import { globalLimiter } from "./middlewares/rate-limit.middleware.js";
+import routes from "./routes/index.js";
 
 const app: Application = express();
 

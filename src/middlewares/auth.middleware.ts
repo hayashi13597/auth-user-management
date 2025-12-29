@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
-import { prisma } from "../config/database";
-import { ForbiddenError, UnauthorizedError } from "../errors";
-import { type DecodedToken, tokenService } from "../services/token.service";
-import { asyncHandler } from "../utils/asyncHandler";
+import { prisma } from "../config/database.js";
+import { ForbiddenError, UnauthorizedError } from "../errors/index.js";
+import { type DecodedToken, tokenService } from "../services/token.service.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 /**
  * Extract token from request (cookies, headers, or query params)

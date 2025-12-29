@@ -1,4 +1,4 @@
-import { prisma } from "../config/database";
+import { prisma } from "../config/database.js";
 
 const DEFAULT_INTERVAL_MS = 1 * 60 * 1000; // 15 minutes
 const DEFAULT_BATCH_SIZE = 500;

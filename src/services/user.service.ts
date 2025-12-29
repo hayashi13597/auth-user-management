@@ -1,7 +1,11 @@
 import bcrypt from "bcrypt";
-import { prisma } from "../config/database";
-import { BadRequestError, NotFoundError, UnauthorizedError } from "../errors";
-import type { User } from "../generated/prisma/client";
+import { prisma } from "../config/database.js";
+import {
+	BadRequestError,
+	NotFoundError,
+	UnauthorizedError,
+} from "../errors/index.js";
+import type { User } from "../generated/prisma/client.js";
 
 type UserResponse = Omit<User, "password">;
 type UpdateProfileData = Pick<User, "name" | "email">;

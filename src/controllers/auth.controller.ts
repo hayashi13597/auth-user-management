@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import { BadRequestError, UnauthorizedError } from "../errors";
-import { authService } from "../services/auth.service";
-import { asyncHandler } from "../utils/asyncHandler";
-import { sendCreated, sendSuccess } from "../utils/response";
+import { BadRequestError, UnauthorizedError } from "../errors/index.js";
+import { authService } from "../services/auth.service.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendCreated, sendSuccess } from "../utils/response.js";
 
 class AuthController {
 	/**

@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { userController } from "../controllers/user.controller";
-import { authenticate, authorize } from "../middlewares/auth.middleware";
-import { validate } from "../middlewares/validate.middleware";
+import { userController } from "../controllers/user.controller.js";
+import { authenticate, authorize } from "../middlewares/auth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
 import {
 	changePasswordSchema,
 	updateProfileSchema,
-} from "../schemas/user.schema";
+} from "../schemas/user.schema.js";
 
 const router = Router();
 
