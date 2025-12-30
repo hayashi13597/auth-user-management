@@ -49,9 +49,41 @@ const loginUserSchema = z.object({
 	}),
 });
 
+const verifyEmailSchema = z.object({
+	query: z.object({
+		token: z
+			.string()
+			.min(1, "Verification token is required")
+			.length(64, "Invalid verification token format"),
+	}),
+});
+
+const resendVerificationSchema = z.object({
+	body: z.object({
+		email: z
+			.email("Invalid email address")
+			.min(1, "Email is required")
+			.toLowerCase()
+			.trim(),
+	}),
+});
+
 type CreateUserInput = z.infer<typeof createUserSchema>;
 type LoginUserInput = z.infer<typeof loginUserSchema>;
+type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
 
-export { createUserSchema, loginUserSchema, passwordSchema };
+export {
+	createUserSchema,
+	loginUserSchema,
+	passwordSchema,
+	resendVerificationSchema,
+	verifyEmailSchema,
+};
 
-export type { CreateUserInput, LoginUserInput };
+export type {
+	CreateUserInput,
+	LoginUserInput,
+	ResendVerificationInput,
+	VerifyEmailInput,
+};

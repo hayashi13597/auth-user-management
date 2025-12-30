@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../config/database.js";
 import {
+	BadRequestError,
 	ConflictError,
 	ForbiddenError,
 	NotFoundError,
@@ -8,6 +9,7 @@ import {
 } from "../errors/index.js";
 import type { RefreshToken, User } from "../generated/prisma/client.js";
 import { auditService } from "./audit.service.js";
+import { emailService } from "./email.service.js";
 import { fingerprintService } from "./fingerprint.service.js";
 import { tokenService } from "./token.service.js";
 import { tokenBlacklistService } from "./token-blacklist.service.js";
@@ -20,13 +22,23 @@ interface LoginMetadata {
 type CreateUserData = Pick<User, "email" | "password" | "name">;
 type CreateUserDataResponse = Omit<
 	User,
-	"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+	| "password"
+	| "failedLoginAttempts"
+	| "lockoutUntil"
+	| "lastFailedLogin"
+	| "emailVerificationToken"
+	| "emailVerificationExpires"
 >;
 type LoginUserData = Pick<User, "email" | "password">;
 type LoginUserDataResponse = {
 	user: Omit<
 		User,
-		"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+		| "password"
+		| "failedLoginAttempts"
+		| "lockoutUntil"
+		| "lastFailedLogin"
+		| "emailVerificationToken"
+		| "emailVerificationExpires"
 	>;
 	accessToken: string;
 	refreshToken: string;
@@ -95,6 +107,7 @@ class AuthService {
 				name: true,
 				isActive: true,
 				role: true,
+				emailVerified: true,
 				createdAt: true,
 				updatedAt: true,
 			},
@@ -102,6 +115,15 @@ class AuthService {
 
 		// Log registration
 		await auditService.logRegister(user.id, email, ipAddress, userAgent);
+
+		// Send verification email
+		await this.sendVerificationEmail(
+			user.id,
+			email,
+			name,
+			ipAddress,
+			userAgent,
+		);
 
 		// return created user without password
 		return user;
@@ -223,6 +245,8 @@ class AuthService {
 			failedLoginAttempts: __,
 			lockoutUntil: ___,
 			lastFailedLogin: ____,
+			emailVerificationToken: _____,
+			emailVerificationExpires: ______,
 			...userWithoutSensitiveData
 		} = user;
 
@@ -532,6 +556,170 @@ class AuthService {
 		);
 
 		return { message: "Session has been revoked" };
+	}
+
+	/**
+	 * Send verification email to a user
+	 * @param userId User ID
+	 * @param email User email
+	 * @param name User name (optional)
+	 * @param ipAddress IP address
+	 * @param userAgent User agent
+	 */
+	async sendVerificationEmail(
+		userId: string,
+		email: string,
+		name?: string | null,
+		ipAddress?: string,
+		userAgent?: string,
+	): Promise<void> {
+		// Generate verification token and expiry
+		const token = emailService.generateVerificationToken();
+		const expires = emailService.getVerificationTokenExpiry();
+
+		// Update user with verification token
+		await prisma.user.update({
+			where: { id: userId },
+			data: {
+				emailVerificationToken: token,
+				emailVerificationExpires: expires,
+			},
+		});
+
+		// Send verification email
+		const emailSent = await emailService.sendVerificationEmail(
+			email,
+			token,
+			name || undefined,
+		);
+
+		if (emailSent) {
+			await auditService.log({
+				userId,
+				action: "EMAIL_VERIFICATION_SENT",
+				details: { email },
+				ipAddress,
+				userAgent,
+			});
+		}
+	}
+
+	/**
+	 * Verify user email with token
+	 * @param token Verification token
+	 * @param metadata Request metadata
+	 * @returns Success message
+	 */
+	async verifyEmail(
+		token: string,
+		metadata: LoginMetadata = {},
+	): Promise<MessageResponse> {
+		const { ipAddress, userAgent } = metadata;
+
+		// Find user with this verification token
+		const user = await prisma.user.findUnique({
+			where: { emailVerificationToken: token },
+		});
+
+		if (!user) {
+			throw new BadRequestError(
+				"Invalid or expired verification token.",
+				"INVALID_VERIFICATION_TOKEN",
+			);
+		}
+
+		// Check if token is expired
+		if (
+			user.emailVerificationExpires &&
+			user.emailVerificationExpires < new Date()
+		) {
+			throw new BadRequestError(
+				"Verification token has expired. Please request a new one.",
+				"VERIFICATION_TOKEN_EXPIRED",
+			);
+		}
+
+		// Check if already verified
+		if (user.emailVerified) {
+			return { message: "Email is already verified." };
+		}
+
+		// Update user - mark email as verified and clear token
+		await prisma.user.update({
+			where: { id: user.id },
+			data: {
+				emailVerified: true,
+				emailVerificationToken: null,
+				emailVerificationExpires: null,
+			},
+		});
+
+		// Log verification
+		await auditService.log({
+			userId: user.id,
+			action: "EMAIL_VERIFIED",
+			details: { email: user.email },
+			ipAddress,
+			userAgent,
+		});
+
+		return { message: "Email verified successfully." };
+	}
+
+	/**
+	 * Resend verification email
+	 * @param email User email
+	 * @param metadata Request metadata
+	 * @returns Success message
+	 */
+	async resendVerificationEmail(
+		email: string,
+		metadata: LoginMetadata = {},
+	): Promise<MessageResponse> {
+		const { ipAddress, userAgent } = metadata;
+
+		// Find user by email
+		const user = await prisma.user.findUnique({
+			where: { email },
+		});
+
+		// Don't reveal if user exists or not
+		if (!user) {
+			return {
+				message:
+					"If an account with that email exists, a verification email has been sent.",
+			};
+		}
+
+		// Check if already verified
+		if (user.emailVerified) {
+			return {
+				message:
+					"If an account with that email exists, a verification email has been sent.",
+			};
+		}
+
+		// Check if user is active
+		if (!user.isActive) {
+			return {
+				message:
+					"If an account with that email exists, a verification email has been sent.",
+			};
+		}
+
+		// Send new verification email
+		await this.sendVerificationEmail(
+			user.id,
+			user.email,
+			user.name,
+			ipAddress,
+			userAgent,
+		);
+
+		return {
+			message:
+				"If an account with that email exists, a verification email has been sent.",
+		};
 	}
 }
 

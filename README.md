@@ -27,6 +27,7 @@ PORT=5000
 NODE_ENV=development
 CLIENT_URL=http://localhost:3000
 API_BASE_URL=http://localhost:5000
+APP_URL=http://localhost:5000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/auth_db?schema=public
 ACCESS_TOKEN_SECRET=replace-with-strong-random-string
 REFRESH_TOKEN_SECRET=replace-with-strong-random-string
@@ -38,6 +39,15 @@ DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=auth_db
+
+# Email Configuration (SMTP)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-username
+SMTP_PASS=your-smtp-password
+EMAIL_FROM_NAME=Auth Service
+EMAIL_FROM_ADDRESS=noreply@example.com
 ```
 
 ## Running the App
@@ -95,6 +105,7 @@ express/
   - `id` (uuid, PK)
   - `email` (unique), `password`, optional `name`
   - `role` (`USER` | `ADMIN` | `MODERATOR`), `isActive` (default true)
+  - `emailVerified` (default false), `emailVerificationToken`, `emailVerificationExpires` (for email verification flow)
   - Timestamps: `createdAt`, `updatedAt`
 - `RefreshToken`
   - `id` (uuid, PK), `token` (unique)

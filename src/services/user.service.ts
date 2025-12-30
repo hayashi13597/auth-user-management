@@ -9,7 +9,12 @@ import type { User } from "../generated/prisma/client.js";
 
 type UserResponse = Omit<
 	User,
-	"password" | "failedLoginAttempts" | "lockoutUntil" | "lastFailedLogin"
+	| "password"
+	| "failedLoginAttempts"
+	| "lockoutUntil"
+	| "lastFailedLogin"
+	| "emailVerificationToken"
+	| "emailVerificationExpires"
 >;
 type UpdateProfileData = Pick<User, "name" | "email">;
 type ChangePasswordData = {
@@ -32,6 +37,7 @@ class UserService {
 				name: true,
 				isActive: true,
 				role: true,
+				emailVerified: true,
 				createdAt: true,
 				updatedAt: true,
 			},
@@ -87,6 +93,7 @@ class UserService {
 				name: true,
 				isActive: true,
 				role: true,
+				emailVerified: true,
 				createdAt: true,
 				updatedAt: true,
 			},
@@ -188,6 +195,7 @@ class UserService {
 				name: true,
 				isActive: true,
 				role: true,
+				emailVerified: true,
 				createdAt: true,
 				updatedAt: true,
 			},
@@ -213,6 +221,7 @@ class UserService {
 				name: true,
 				isActive: true,
 				role: true,
+				emailVerified: true,
 				createdAt: true,
 				updatedAt: true,
 			},

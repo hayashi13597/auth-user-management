@@ -9,7 +9,12 @@ import {
 	registerLimiter,
 } from "../middlewares/rate-limit.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
-import { createUserSchema, loginUserSchema } from "../schemas/auth.schema.js";
+import {
+	createUserSchema,
+	loginUserSchema,
+	resendVerificationSchema,
+	verifyEmailSchema,
+} from "../schemas/auth.schema.js";
 
 const router = Router();
 
@@ -41,6 +46,28 @@ router.post(
  * Refresh access and refresh tokens
  */
 router.post("/refresh", refreshLimiter, authController.refresh);
+
+/**
+ * GET /api/auth/verify-email
+ * Verify user email with token
+ */
+router.get(
+	"/verify-email",
+	apiLimiter,
+	validate(verifyEmailSchema),
+	authController.verifyEmail,
+);
+
+/**
+ * POST /api/auth/resend-verification
+ * Resend email verification
+ */
+router.post(
+	"/resend-verification",
+	authLimiter,
+	validate(resendVerificationSchema),
+	authController.resendVerification,
+);
 
 // Protected routes
 /**

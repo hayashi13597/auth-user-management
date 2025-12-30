@@ -25,6 +25,8 @@ enum AuditAction {
   ACCOUNT_UNLOCKED
   PASSWORD_CHANGED
   REGISTER
+  EMAIL_VERIFICATION_SENT
+  EMAIL_VERIFIED
 }
 
 model User {
@@ -35,6 +37,11 @@ model User {
 
   isActive  Boolean  @default(true)
   role      UserRole @default(USER)
+
+  // Email verification fields
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?   @unique
+  emailVerificationExpires DateTime?
 
   // Account lockout fields
   failedLoginAttempts Int      @default(0)

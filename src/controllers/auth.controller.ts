@@ -184,6 +184,44 @@ class AuthController {
 			sendSuccess(res, undefined, "Session has been revoked");
 		},
 	);
+
+	/**
+	 * Verify user email
+	 * GET /api/auth/verify-email?token=xxx
+	 * @param req Request containing verification token
+	 * @param res Response with success message
+	 * @return void
+	 */
+	verifyEmail = asyncHandler(
+		async (req: Request, res: Response): Promise<void> => {
+			const { token } = req.query;
+
+			if (!token || typeof token !== "string") {
+				throw new BadRequestError("Verification token is required");
+			}
+
+			const metadata = this.getMetadata(req);
+			const result = await authService.verifyEmail(token, metadata);
+			sendSuccess(res, undefined, result.message);
+		},
+	);
+
+	/**
+	 * Resend verification email
+	 * POST /api/auth/resend-verification
+	 * @param req Request containing email
+	 * @param res Response with success message
+	 * @return void
+	 */
+	resendVerification = asyncHandler(
+		async (req: Request, res: Response): Promise<void> => {
+			const { email } = req.body;
+
+			const metadata = this.getMetadata(req);
+			const result = await authService.resendVerificationEmail(email, metadata);
+			sendSuccess(res, undefined, result.message);
+		},
+	);
 }
 
 export const authController = new AuthController();
