@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { redis } from "../config/redis.js";
 
@@ -17,7 +18,14 @@ class TokenBlacklistService {
 		if (ttlSeconds <= 0) return;
 
 		try {
-			await redis.set(this.refreshKeyPrefix + token, "1", "EX", ttlSeconds);
+			// Hash the token before using as Redis key
+			const hashedToken = this.hashToken(token);
+			await redis.set(
+				this.refreshKeyPrefix + hashedToken,
+				"1",
+				"EX",
+				ttlSeconds,
+			);
 		} catch (error) {
 			console.error("Failed to add refresh token to blacklist:", error);
 		}
@@ -32,11 +40,18 @@ class TokenBlacklistService {
 		if (ttlSeconds <= 0) return;
 
 		try {
+			// Hash the token before using as Redis key
+			const hashedToken = this.hashToken(token);
 			// Add to blacklist
-			await redis.set(this.refreshKeyPrefix + token, "1", "EX", ttlSeconds);
+			await redis.set(
+				this.refreshKeyPrefix + hashedToken,
+				"1",
+				"EX",
+				ttlSeconds,
+			);
 			// Add grace marker (expires quickly)
 			await redis.set(
-				this.graceKeyPrefix + token,
+				this.graceKeyPrefix + hashedToken,
 				"1",
 				"EX",
 				this.GRACE_PERIOD_SECONDS,
@@ -52,9 +67,11 @@ class TokenBlacklistService {
 	 */
 	async isRefreshTokenBlacklisted(token: string): Promise<boolean> {
 		try {
+			// Hash the token to look up in Redis
+			const hashedToken = this.hashToken(token);
 			const [isBlacklisted, isInGrace] = await Promise.all([
-				redis.exists(this.refreshKeyPrefix + token),
-				redis.exists(this.graceKeyPrefix + token),
+				redis.exists(this.refreshKeyPrefix + hashedToken),
+				redis.exists(this.graceKeyPrefix + hashedToken),
 			]);
 
 			// If in grace period, don't consider it blacklisted yet
@@ -77,7 +94,14 @@ class TokenBlacklistService {
 		if (ttlSeconds <= 0) return;
 
 		try {
-			await redis.set(this.accessKeyPrefix + token, "1", "EX", ttlSeconds);
+			// Hash the token before using as Redis key
+			const hashedToken = this.hashToken(token);
+			await redis.set(
+				this.accessKeyPrefix + hashedToken,
+				"1",
+				"EX",
+				ttlSeconds,
+			);
 		} catch (error) {
 			console.error("Failed to add access token to blacklist:", error);
 		}
@@ -88,7 +112,9 @@ class TokenBlacklistService {
 	 */
 	async isAccessTokenBlacklisted(token: string): Promise<boolean> {
 		try {
-			const exists = await redis.exists(this.accessKeyPrefix + token);
+			// Hash the token to look up in Redis
+			const hashedToken = this.hashToken(token);
+			const exists = await redis.exists(this.accessKeyPrefix + hashedToken);
 			return exists === 1;
 		} catch (error) {
 			console.error("Failed to check access token blacklist:", error);
@@ -108,7 +134,14 @@ class TokenBlacklistService {
 		if (ttlSeconds <= 0) return;
 
 		try {
-			await redis.set(this.accessKeyPrefix + token, userId, "EX", ttlSeconds);
+			// Hash the token before using as Redis key
+			const hashedToken = this.hashToken(token);
+			await redis.set(
+				this.accessKeyPrefix + hashedToken,
+				userId,
+				"EX",
+				ttlSeconds,
+			);
 		} catch (error) {
 			console.error("Failed to add user access token to blacklist:", error);
 		}
@@ -121,6 +154,14 @@ class TokenBlacklistService {
 
 	async isBlacklisted(token: string): Promise<boolean> {
 		return this.isRefreshTokenBlacklisted(token);
+	}
+
+	/**
+	 * Hash a token for use as Redis key
+	 * Ensures we don't store raw tokens in Redis
+	 */
+	private hashToken(token: string): string {
+		return createHash("sha256").update(token).digest("hex");
 	}
 
 	private getTtlFromToken(token: string): number {

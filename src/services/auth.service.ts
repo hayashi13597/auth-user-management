@@ -226,10 +226,12 @@ class AuthService {
 		const { accessToken, refreshToken } = tokenService.generateTokens(payload);
 
 		// save refresh token to database with fingerprint
+		// Hash the token before storing for security
+		const hashedRefreshToken = tokenService.hashToken(refreshToken);
 		await prisma.refreshToken.create({
 			data: {
 				userId: user.id,
-				token: refreshToken,
+				token: hashedRefreshToken,
 				expiresAt: tokenService.getRefreshTokenExpiry(),
 				ipAddress: ipAddress || null,
 				userAgent: userAgent || null,
@@ -323,9 +325,15 @@ class AuthService {
 	/**
 	 * Refresh tokens for a user.
 	 * @param refreshToken Refresh token string
+	 * @param metadata Request metadata for fingerprint validation
 	 * @return Object containing new access and refresh tokens
 	 */
-	async refreshTokens(refreshToken: string): Promise<RefreshTokensResponse> {
+	async refreshTokens(
+		refreshToken: string,
+		metadata: LoginMetadata = {},
+	): Promise<RefreshTokensResponse> {
+		const { ipAddress, userAgent } = metadata;
+
 		// verify refresh token first to get user info for potential revocation
 		const decoded = tokenService.verifyRefreshToken(refreshToken);
 		if (!decoded) {
@@ -350,8 +358,10 @@ class AuthService {
 		}
 
 		// check if refresh token exists in database and is not revoked
+		// Hash the token to look up in database
+		const hashedRefreshToken = tokenService.hashToken(refreshToken);
 		const storedToken = await prisma.refreshToken.findUnique({
-			where: { token: refreshToken },
+			where: { token: hashedRefreshToken },
 		});
 		if (!storedToken || storedToken.isRevoked) {
 			await tokenBlacklistService.add(refreshToken);
@@ -369,6 +379,39 @@ class AuthService {
 			);
 		}
 
+		// Validate fingerprint to detect potential token theft
+		const originalData = {
+			ipAddress: storedToken.ipAddress || undefined,
+			userAgent: storedToken.userAgent || undefined,
+		};
+		const currentData = { ipAddress, userAgent };
+
+		if (fingerprintService.hasSignificantChange(originalData, currentData)) {
+			// Log the suspicious activity
+			await auditService.logSuspiciousFingerprint(
+				decoded.userId,
+				storedToken.ipAddress,
+				storedToken.userAgent,
+				ipAddress,
+				userAgent,
+			);
+			console.warn(
+				`[SECURITY] Suspicious fingerprint change detected. user=${decoded.userId} ` +
+					`originalIp=${storedToken.ipAddress} currentIp=${ipAddress} ` +
+					`originalUA=${storedToken.userAgent?.substring(
+						0,
+						50,
+					)} currentUA=${userAgent?.substring(0, 50)}`,
+			);
+
+			// SECURITY: Revoke ALL tokens for this user - potential token theft
+			await this.revokeAllUserTokens(decoded.userId);
+			throw new UnauthorizedError(
+				"Suspicious activity detected. All sessions have been revoked for your security. Please login again.",
+				"SUSPICIOUS_FINGERPRINT",
+			);
+		}
+
 		// generate new tokens
 		const payload = {
 			userId: decoded.userId,
@@ -380,20 +423,26 @@ class AuthService {
 
 		// revoke old refresh token with grace period (allows concurrent refresh)
 		await prisma.refreshToken.update({
-			where: { token: refreshToken },
+			where: { token: hashedRefreshToken },
 			data: { isRevoked: true },
 		});
 		await tokenBlacklistService.addRefreshTokenWithGrace(refreshToken);
 
-		// store new refresh token with fingerprint
+		// store new refresh token with updated fingerprint
+		// Hash the new token before storing
+		const hashedNewRefreshToken = tokenService.hashToken(newRefreshToken);
+		const newFingerprint = fingerprintService.generate({
+			ipAddress,
+			userAgent,
+		});
 		await prisma.refreshToken.create({
 			data: {
-				token: newRefreshToken,
+				token: hashedNewRefreshToken,
 				userId: decoded.userId,
 				expiresAt: tokenService.getRefreshTokenExpiry(),
-				ipAddress: storedToken.ipAddress || null,
-				userAgent: storedToken.userAgent || null,
-				fingerprint: storedToken.fingerprint || null,
+				ipAddress: ipAddress || storedToken.ipAddress || null,
+				userAgent: userAgent || storedToken.userAgent || null,
+				fingerprint: newFingerprint,
 			},
 		});
 
@@ -409,18 +458,22 @@ class AuthService {
 
 	/**
 	 * logout a user.
-	 * @param refreshToken Refresh token string (optional)
+	 * @param refreshToken Refresh token string
+	 * @param accessToken Access token string (optional, for immediate revocation)
 	 * @param metadata Request metadata for audit logging
 	 */
 	async logout(
 		refreshToken: string,
+		accessToken?: string,
 		metadata: LoginMetadata = {},
 	): Promise<MessageResponse> {
 		const { ipAddress, userAgent } = metadata;
 
 		// find the refresh token in database
+		// Hash the token to look up in database
+		const hashedRefreshToken = tokenService.hashToken(refreshToken);
 		const token = await prisma.refreshToken.findUnique({
-			where: { token: refreshToken },
+			where: { token: hashedRefreshToken },
 		});
 
 		// if token not found, throw error
@@ -430,10 +483,15 @@ class AuthService {
 
 		// revoke the refresh token
 		await prisma.refreshToken.update({
-			where: { token: refreshToken },
+			where: { token: hashedRefreshToken },
 			data: { isRevoked: true },
 		});
 		await tokenBlacklistService.add(refreshToken);
+
+		// Blacklist access token for immediate revocation
+		if (accessToken) {
+			await tokenBlacklistService.addAccessToken(accessToken);
+		}
 
 		// Log logout
 		await auditService.logLogout(token.userId, ipAddress, userAgent);
@@ -445,11 +503,13 @@ class AuthService {
 	 * Logout from all devices.
 	 * remove all refresh tokens for the user.
 	 * @param userId User ID
+	 * @param accessToken Current access token (optional, for immediate revocation)
 	 * @param metadata Request metadata for audit logging
 	 * @return success message
 	 */
 	async revokeAllUserTokens(
 		userId: string,
+		accessToken?: string,
 		metadata: LoginMetadata = {},
 	): Promise<MessageResponse> {
 		const { ipAddress, userAgent } = metadata;
@@ -479,6 +539,11 @@ class AuthService {
 				await tokenBlacklistService.add(token);
 			}),
 		);
+
+		// Blacklist access token for immediate revocation
+		if (accessToken) {
+			await tokenBlacklistService.addAccessToken(accessToken);
+		}
 
 		// Log all sessions revoked (only if called with metadata - i.e., user-initiated)
 		if (ipAddress || userAgent) {

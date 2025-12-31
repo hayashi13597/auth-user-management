@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
 interface TokenPayload {
@@ -165,6 +165,16 @@ class TokenService {
 		}
 
 		return parts[1];
+	}
+
+	/**
+	 * Hash a token for secure storage
+	 * Used to store refresh tokens in database without exposing the raw value
+	 * @param token - The raw token to hash
+	 * @returns SHA-256 hash of the token
+	 */
+	hashToken(token: string): string {
+		return createHash("sha256").update(token).digest("hex");
 	}
 }
 

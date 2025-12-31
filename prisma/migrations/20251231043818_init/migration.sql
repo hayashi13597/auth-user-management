@@ -2,7 +2,7 @@
 CREATE TYPE "UserRole" AS ENUM ('USER', 'ADMIN', 'MODERATOR');
 
 -- CreateEnum
-CREATE TYPE "AuditAction" AS ENUM ('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REUSE_DETECTED', 'SESSION_REVOKED', 'ALL_SESSIONS_REVOKED', 'ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED', 'PASSWORD_CHANGED', 'REGISTER');
+CREATE TYPE "AuditAction" AS ENUM ('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REUSE_DETECTED', 'SUSPICIOUS_FINGERPRINT', 'SESSION_REVOKED', 'ALL_SESSIONS_REVOKED', 'ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED', 'PASSWORD_CHANGED', 'REGISTER', 'EMAIL_VERIFICATION_SENT', 'EMAIL_VERIFIED');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -12,6 +12,9 @@ CREATE TABLE "users" (
     "name" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "role" "UserRole" NOT NULL DEFAULT 'USER',
+    "emailVerified" BOOLEAN NOT NULL DEFAULT false,
+    "emailVerificationToken" TEXT,
+    "emailVerificationExpires" TIMESTAMP(3),
     "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0,
     "lockoutUntil" TIMESTAMP(3),
     "lastFailedLogin" TIMESTAMP(3),
@@ -52,6 +55,9 @@ CREATE TABLE "audit_logs" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_emailVerificationToken_key" ON "users"("emailVerificationToken");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "refresh_tokens_token_key" ON "refresh_tokens"("token");

@@ -72,7 +72,8 @@ class AuthController {
 			throw new BadRequestError("Refresh token is missing");
 		}
 
-		const result = await authService.refreshTokens(refreshToken);
+		const metadata = this.getMetadata(req);
+		const result = await authService.refreshTokens(refreshToken, metadata);
 
 		// set new HttpOnly cookies
 		res.cookie("accessToken", result.accessToken, accessTokenCookieOptions);
@@ -89,13 +90,22 @@ class AuthController {
 	 */
 	logout = asyncHandler(async (req: Request, res: Response): Promise<void> => {
 		const refreshToken = req.cookies.refreshToken;
+		const accessToken = req.cookies.accessToken;
 
 		if (!refreshToken) {
 			throw new BadRequestError("Refresh token is missing");
 		}
 
+		if (!accessToken) {
+			throw new BadRequestError("Access token is missing");
+		}
+
 		const metadata = this.getMetadata(req);
-		const result = await authService.logout(refreshToken, metadata);
+		const result = await authService.logout(
+			refreshToken,
+			accessToken,
+			metadata,
+		);
 
 		// Clear cookies with proper options
 		res.clearCookie("accessToken", clearAccessTokenCookieOptions);
@@ -145,8 +155,14 @@ class AuthController {
 				throw new BadRequestError("User ID is missing");
 			}
 
+			const accessToken = req.cookies.accessToken;
+
+			if (!accessToken) {
+				throw new BadRequestError("Access token is missing");
+			}
+
 			const metadata = this.getMetadata(req);
-			await authService.revokeAllUserTokens(userId, metadata);
+			await authService.revokeAllUserTokens(userId, accessToken, metadata);
 
 			// Clear current cookies with proper options
 			res.clearCookie("accessToken", clearAccessTokenCookieOptions);

@@ -115,6 +115,31 @@ class AuditService {
 	}
 
 	/**
+	 * Log suspicious fingerprint detection (potential token theft)
+	 */
+	async logSuspiciousFingerprint(
+		userId: string,
+		originalIp: string | null,
+		originalUserAgent: string | null,
+		currentIp?: string,
+		currentUserAgent?: string,
+	): Promise<void> {
+		await this.log({
+			userId,
+			action: "SUSPICIOUS_FINGERPRINT",
+			details: {
+				severity: "MEDIUM",
+				originalIp,
+				originalUserAgent,
+				currentIp,
+				currentUserAgent,
+			},
+			ipAddress: currentIp,
+			userAgent: currentUserAgent,
+		});
+	}
+
+	/**
 	 * Log session revocation
 	 */
 	async logSessionRevoked(
