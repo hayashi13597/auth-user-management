@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
+import { UnauthorizedError } from "../errors/AppError.js";
 
 interface TokenPayload {
 	userId: string;
@@ -98,12 +99,21 @@ class TokenService {
 			return decoded;
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
-				throw new Error("Access token has expired.");
+				throw new UnauthorizedError(
+					"Access token has expired.",
+					"TOKEN_EXPIRED",
+				);
 			}
 			if (error instanceof jwt.JsonWebTokenError) {
-				throw new Error("Access token is invalid.");
+				throw new UnauthorizedError(
+					"Access token is invalid.",
+					"TOKEN_INVALID",
+				);
 			}
-			throw new Error("Verify access token failed.");
+			throw new UnauthorizedError(
+				"Verify access token failed.",
+				"TOKEN_INVALID",
+			);
 		}
 	}
 
@@ -122,12 +132,21 @@ class TokenService {
 			return decoded;
 		} catch (error) {
 			if (error instanceof jwt.TokenExpiredError) {
-				throw new Error("Refresh token has expired.");
+				throw new UnauthorizedError(
+					"Refresh token has expired.",
+					"REFRESH_TOKEN_EXPIRED",
+				);
 			}
 			if (error instanceof jwt.JsonWebTokenError) {
-				throw new Error("Refresh token is invalid.");
+				throw new UnauthorizedError(
+					"Refresh token is invalid.",
+					"REFRESH_TOKEN_INVALID",
+				);
 			}
-			throw new Error("Verify refresh token failed.");
+			throw new UnauthorizedError(
+				"Verify refresh token failed.",
+				"REFRESH_TOKEN_INVALID",
+			);
 		}
 	}
 
