@@ -6,6 +6,7 @@ import {
 	UnauthorizedError,
 } from "../errors/index.js";
 import type { User } from "../generated/prisma/client.js";
+import { authService } from "./auth.service.js";
 
 type UserResponse = Omit<
 	User,
@@ -54,11 +55,13 @@ class UserService {
 	 * Update user profile
 	 * @param userId User ID
 	 * @param data Update data (name, email)
+	 * @param metadata Request metadata for audit logging
 	 * @returns Updated user profile
 	 */
 	async updateProfile(
 		userId: string,
 		data: Partial<UpdateProfileData>,
+		metadata: { ipAddress?: string; userAgent?: string } = {},
 	): Promise<UserResponse> {
 		// Check if user exists
 		const existingUser = await prisma.user.findUnique({
@@ -69,8 +72,10 @@ class UserService {
 			throw new NotFoundError("User not found", "USER_NOT_FOUND");
 		}
 
+		const isEmailChanging = data.email && data.email !== existingUser.email;
+
 		// If email is being updated, check if it's already in use
-		if (data.email && data.email !== existingUser.email) {
+		if (isEmailChanging) {
 			const emailExists = await prisma.user.findUnique({
 				where: { email: data.email },
 			});
@@ -80,12 +85,13 @@ class UserService {
 			}
 		}
 
-		// Update user
+		// Update user (reset emailVerified if email is changing)
 		const updatedUser = await prisma.user.update({
 			where: { id: userId },
 			data: {
 				...(data.name !== undefined && { name: data.name }),
 				...(data.email !== undefined && { email: data.email }),
+				...(isEmailChanging && { emailVerified: false }),
 			},
 			select: {
 				id: true,
@@ -98,6 +104,17 @@ class UserService {
 				updatedAt: true,
 			},
 		});
+
+		// Send verification email to the new email address
+		if (isEmailChanging) {
+			await authService.sendVerificationEmail(
+				userId,
+				updatedUser.email,
+				updatedUser.name,
+				metadata.ipAddress,
+				metadata.userAgent,
+			);
+		}
 
 		return updatedUser;
 	}

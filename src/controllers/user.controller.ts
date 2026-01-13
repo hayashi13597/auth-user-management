@@ -34,7 +34,10 @@ class UserController {
 				throw new BadRequestError("User ID not found in request");
 			}
 
-			const user = await userService.updateProfile(req.user.userId, req.body);
+			const user = await userService.updateProfile(req.user.userId, req.body, {
+				ipAddress: req.ip,
+				userAgent: req.headers["user-agent"],
+			});
 			sendSuccess(res, { user }, "Profile updated successfully");
 		},
 	);
